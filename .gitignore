@@ -1,0 +1,48 @@
+# .gitignore для Visual Studio C++
+
+# Служебные папки Visual Studio
+.vs/
+[Bb]in/
+[Oo]bj/
+[Xx]64/
+[Dd]ebug/
+[Rr]elease/
+[Tt]est[Rr]esults/
+
+# Файлы проектов и решений (но не исходники!)
+*.user
+*.aps
+*.pch
+*.vspscc
+*.vssscc
+*.sdf
+*.opensdf
+*.suo
+*.tlog
+*.lastbuildstate
+*.idb
+*.pdb
+*.ilk
+*.log
+*.obj
+*.exe
+*.lib
+*.dll
+*.cachefile
+
+# Файлы базы данных IntelliSense
+*.db
+*.ipch
+
+# Резервные копии
+*.backup.*
+*.~*
+
+# Исключения - включаем нужные файлы
+!.gitignore
+!*.sln
+!*.vcxproj
+!*.vcxproj.filters
+!*.cpp
+!*.h
+!*.hpp
