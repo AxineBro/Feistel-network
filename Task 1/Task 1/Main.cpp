@@ -65,22 +65,18 @@ uint64_t bytes_to_uint64(const unsigned char* bytes) {
     return val;
 }
 
-vector<unsigned char> add_padding(const string& input_str) {
-    vector<unsigned char> data(input_str.begin(), input_str.end());
-
-    size_t padding_needed = BLOCK_SIZE - (data.size() % BLOCK_SIZE);
-
-    if (padding_needed == 0) 
+vector<unsigned char> add_padding(const vector<unsigned char>& data) {
+    vector<unsigned char> padded = data;
+    size_t padding_needed = BLOCK_SIZE - (padded.size() % BLOCK_SIZE);
+    if (padding_needed == 0)
         padding_needed = BLOCK_SIZE;
-    
-    unsigned char pad_byte = static_cast<unsigned char>(padding_needed);
-    
-    data.insert(data.end(), padding_needed, pad_byte);
 
-    return data;
+    unsigned char pad_byte = static_cast<unsigned char>(padding_needed);
+    padded.insert(padded.end(), padding_needed, pad_byte);
+    return padded;
 }
 
-string remove_padding(const vector<unsigned char>& padded) {
+vector<unsigned char> remove_padding(const vector<unsigned char>& padded) {
     if (padded.empty() || padded.size() % BLOCK_SIZE != 0) {
         throw runtime_error("Invalid padded data");
     }
@@ -94,17 +90,12 @@ string remove_padding(const vector<unsigned char>& padded) {
             throw runtime_error("Invalid padding");
         }
     }
-    return string(padded.begin(), padded.end() - padding_len);
+    return vector<unsigned char>(padded.begin(), padded.end() - padding_len);
 }
 
-void process_data(const string& input_str, vector<unsigned char>& encrypted, uint64_t K, bool encrypt_mode) {
-    vector<unsigned char> padded;
-    if (encrypt_mode) {
-        padded = add_padding(input_str);
-    }
-    else {
-        padded = input_str.length() % BLOCK_SIZE == 0 ? vector<unsigned char>(input_str.begin(), input_str.end()) : throw runtime_error("Invalid input size for decryption");
-    }
+void process_encrypt(const string& input_str, vector<unsigned char>& encrypted, uint64_t K) {
+    vector<unsigned char> data(input_str.begin(), input_str.end());
+    vector<unsigned char> padded = add_padding(data);
     encrypted.resize(padded.size());
 
     for (size_t i = 0; i < padded.size(); i += BLOCK_SIZE) {
@@ -113,21 +104,38 @@ void process_data(const string& input_str, vector<unsigned char>& encrypted, uin
         uint64_t val = bytes_to_uint64(block);
         uint32_t L = static_cast<uint32_t>(val >> 32);
         uint32_t R = static_cast<uint32_t>(val & 0xFFFFFFFFULL);
-        if (encrypt_mode) {
-            encrypt(L, R, K);
-        }
-        else {
-            decrypt(L, R, K);
-        }
+
+        encrypt(L, R, K);
+
         val = (static_cast<uint64_t>(L) << 32) | R;
         uint64_to_bytes(val, block);
         memcpy(&encrypted[i], block, 8);
     }
+}
 
-    if (!encrypt_mode) {
-        string decrypted = remove_padding(encrypted);
-        cout << "Decrypted text: " << decrypted << endl;
+void process_decrypt(const vector<unsigned char>& encrypted_data, string& decrypted_text, uint64_t K) {
+    if (encrypted_data.size() % BLOCK_SIZE != 0) {
+        throw runtime_error("Invalid encrypted data size");
     }
+
+    vector<unsigned char> decrypted_bytes(encrypted_data.size());
+
+    for (size_t i = 0; i < encrypted_data.size(); i += BLOCK_SIZE) {
+        unsigned char block[8];
+        memcpy(block, &encrypted_data[i], 8);
+        uint64_t val = bytes_to_uint64(block);
+        uint32_t L = static_cast<uint32_t>(val >> 32);
+        uint32_t R = static_cast<uint32_t>(val & 0xFFFFFFFFULL);
+
+        decrypt(L, R, K);
+
+        val = (static_cast<uint64_t>(L) << 32) | R;
+        uint64_to_bytes(val, block);
+        memcpy(&decrypted_bytes[i], block, 8);
+    }
+
+    vector<unsigned char> unpadded = remove_padding(decrypted_bytes);
+    decrypted_text = string(unpadded.begin(), unpadded.end());
 }
 
 double inputNumber(const string& str, const bool& isInteger, const bool& isPositive) {
@@ -190,6 +198,26 @@ uint64_t getKeyFromUser() {
     }
 }
 
+vector<unsigned char> hexStringToBytes(const string& hex_str) {
+    vector<unsigned char> bytes;
+    stringstream ss(hex_str);
+    string hex_byte;
+
+    while (ss >> hex_byte) {
+        try {
+            int byte = stoi(hex_byte, nullptr, 16);
+            if (byte < 0 || byte > 255) {
+                throw runtime_error("Invalid hex byte value");
+            }
+            bytes.push_back(static_cast<unsigned char>(byte));
+        }
+        catch (const exception& e) {
+            throw runtime_error("Invalid hex input format");
+        }
+    }
+    return bytes;
+}
+
 int main() {
     cout << "Select the mode:" << endl;
     cout << "1. Encrypt" << endl;
@@ -197,47 +225,39 @@ int main() {
 
     int choice;
     bool validChoice = false;
-    bool isEncrypt = true;
     string input_text;
     uint64_t K;
 
-    // Получаем выбор пользователя
     while (!validChoice) {
         choice = inputNumber("Your choice: ", true, true);
         switch (choice) {
         case 1:
             cout << "Enter text to encrypt: ";
+            cin.ignore();
             getline(cin, input_text);
             validChoice = true;
-            isEncrypt = true;
             break;
         case 2:
             cout << "Enter text to decrypt (hex, space-separated, e.g., 01 2A 3B): ";
+            cin.ignore();
             getline(cin, input_text);
             validChoice = true;
-            isEncrypt = false;
             break;
         default:
             cout << "Invalid choice! Please try again." << endl;
         }
     }
 
-    // Генерация или ввод ключа
-    if (isEncrypt) {
+    if (choice == 1) {
         random_device rd;
         mt19937_64 gen(rd());
         uniform_int_distribution<uint64_t> dis(0, UINT64_MAX);
         K = dis(gen);
-        cout << "Generated key: " << hex << K << endl;
-    }
-    else {
-        K = getKeyFromUser();
-    }
+        cout << "Generated key: " << hex << setw(16) << setfill('0') << K << endl;
 
-    // Обработка данных
-    vector<unsigned char> encrypted;
-    if (isEncrypt) {
-        process_data(input_text, encrypted, K, true);
+        vector<unsigned char> encrypted;
+        process_encrypt(input_text, encrypted, K);
+
         cout << "Encrypted (hex): ";
         for (size_t i = 0; i < encrypted.size(); ++i) {
             cout << setw(2) << setfill('0') << hex << (int)encrypted[i] << " ";
@@ -245,28 +265,19 @@ int main() {
         cout << endl;
     }
     else {
-        // Для дешифрования преобразуем входной текст из hex в байты
-        vector<unsigned char> input_bytes;
-        stringstream ss(input_text);
-        string hex_byte;
-        while (ss >> hex_byte) {
-            try {
-                int byte = stoi(hex_byte, nullptr, 16);
-                if (byte < 0 || byte > 255) {
-                    throw runtime_error("Invalid hex byte value");
-                }
-                input_bytes.push_back(static_cast<unsigned char>(byte));
-            }
-            catch (const exception& e) {
-                cout << "Error: Invalid hex input format!" << endl;
-                return 1;
-            }
+        K = getKeyFromUser();
+
+        try {
+            vector<unsigned char> encrypted_data = hexStringToBytes(input_text);
+            string decrypted_text;
+            process_decrypt(encrypted_data, decrypted_text, K);
+
+            cout << "Decrypted text: " << decrypted_text << endl;
         }
-        if (input_bytes.size() % BLOCK_SIZE != 0) {
-            cout << "Error: Input size must be a multiple of 8 bytes for decryption!" << endl;
+        catch (const exception& e) {
+            cout << "Error: " << e.what() << endl;
             return 1;
         }
-        process_data(string(input_bytes.begin(), input_bytes.end()), encrypted, K, false);
     }
 
     return 0;
