@@ -46,3 +46,29 @@
 !*.cpp
 !*.h
 !*.hpp
+# Qt-specific files
+*.pro.user
+*.pro.user.*
+build/
+*.o
+*.exe
+Makefile*
+moc_*.cpp
+moc_*.h
+ui_*.h
+.qmake.stash
+qrc_*.cpp
+
+# General temporary files
+*.bak
+*.tmp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# IDE and editor files
+*.vscode/
+*.idea/
+*.sublime-project
+*.sublime-workspace
